@@ -1,0 +1,84 @@
+const float Kp = 1;  // calc through the process
+const float Ki = 0;  
+const float Kd = 0;  
+
+const float a = 0.2; 
+
+class PID {
+  private:
+    float setpoint;
+    float integral;
+    float previousError;
+    float previousIntegral;
+  
+  public:
+    PID() {
+      setpoint = 0.0;
+      integral = 0.0;
+      previousError = 0.0;
+      previousIntegral = 0.0;
+    }
+
+    void setSetpoint(float sp) {
+      setpoint = sp;
+    }
+
+    float compute(float currentSpeed, float dt) {
+      if (dt <= 0) dt = 0.001; 
+
+      float error = setpoint - currentSpeed;
+
+      
+      integral = constrain(previousIntegral + error * dt, -255 / Ki, 255 / Ki);
+
+      float derivative = (error - previousError) / dt;
+
+      float output = Kp * error + Ki * integral + Kd * derivative;
+      previousError = error;
+      previousIntegral = integral;
+
+      return constrain(output, 0, 255);
+    }
+};
+
+float exponentialSmoothing(float newValue, float smoothedValue) {
+  return a * newValue + (1 - a) * smoothedValue;
+}
+
+PID pid;
+
+const int motorPin = 9;
+const int sensorPin = A0;
+
+unsigned long lastTime = 0;
+float dt = 0.1; 
+float smoothedSpeed = 0.0;
+
+void setup() {
+  pinMode(motorPin, OUTPUT);
+  Serial.begin(9600);
+
+  pid.setSetpoint(100); 
+}
+
+void loop() {
+  int rawSpeed = analogRead(sensorPin);
+  float currentSpeed = map(rawSpeed, 0, 1023, 0, 255); 
+
+  smoothedSpeed = exponentialSmoothing(currentSpeed, smoothedSpeed);
+
+  unsigned long currentTime = millis();
+  dt = (currentTime - lastTime) / 1000.0; 
+  lastTime = currentTime;
+
+  float controlSignal = pid.compute(smoothedSpeed, dt);
+
+  analogWrite(motorPin, controlSignal);
+
+  
+  Serial.print("Raw Speed: "); Serial.print(rawSpeed);
+  Serial.print(" Smoothed Speed: "); Serial.print(smoothedSpeed);
+  Serial.print(" Control Signal: "); Serial.println(controlSignal);
+
+  delay(100);
+}
